@@ -24,6 +24,7 @@ class DatabaseConfig:
     socket_timeout: int = 5000
     server_selection_timeout: int = 5000
     max_pool_size: int = 50
+    auto_connect_localhost: bool = True
 
 
 @dataclass

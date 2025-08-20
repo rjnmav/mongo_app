@@ -30,6 +30,7 @@ from src.config.settings import get_config
 from src.utils.logging_config import initialize_logging, get_logger
 from src.views.main_window import MainWindow
 from src.utils.helpers import show_error_message
+from src.styles.theme_manager import theme_manager
 
 
 class MongoDBVisualizerApp(QApplication):
@@ -51,6 +52,9 @@ class MongoDBVisualizerApp(QApplication):
         
         # Set application style
         self.setStyle('Fusion')
+        
+        # Apply modern themes
+        theme_manager.apply_initial_theme()
         
         # Initialize configuration and logging
         self.config = get_config()

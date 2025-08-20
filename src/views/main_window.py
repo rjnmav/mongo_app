@@ -30,6 +30,7 @@ from ..utils.helpers import (
     SettingsManager, show_error_message, show_info_message, JsonFormatter
 )
 from ..utils.logging_config import get_logger
+from ..styles.theme_manager import theme_manager, ThemeType
 from .connection_dialog import ConnectionDialog
 from .document_viewer import DocumentViewer
 from .syntax_highlighter import JsonSyntaxHighlighter
@@ -135,20 +136,7 @@ class DatabaseTreeWidget(QTreeWidget):
         self.setSelectionMode(QAbstractItemView.SingleSelection)
         self.setContextMenuPolicy(Qt.CustomContextMenu)
         
-        # Set icons (using unicode characters as placeholders)
-        self.setStyleSheet("""
-            QTreeWidget::item {
-                padding: 4px;
-                border: none;
-            }
-            QTreeWidget::item:selected {
-                background-color: #3daee9;
-                color: white;
-            }
-            QTreeWidget::item:hover {
-                background-color: #e3f2fd;
-            }
-        """)
+        # Tree widget styling is now handled by the global theme
     
     def setup_connections(self):
         """Setup signal connections."""
@@ -301,6 +289,9 @@ class MainWindow(QMainWindow):
         self.refresh_timer.timeout.connect(self.auto_refresh)
         
         self.logger.info("Main window initialized")
+        
+        # Auto-connect to localhost on startup (delayed to ensure UI is ready)
+        QTimer.singleShot(500, self.auto_connect_localhost)
     
     def init_ui(self):
         """Initialize the main user interface."""
@@ -349,6 +340,9 @@ class MainWindow(QMainWindow):
         actions_layout.setContentsMargins(5, 5, 5, 5)
         
         refresh_btn = QPushButton("Refresh")
+        refresh_btn.setIcon(qta.icon('fa5s.sync-alt', color='white'))
+        refresh_btn.setObjectName("refresh_button")
+        refresh_btn.setToolTip("Refresh database structure")
         refresh_btn.clicked.connect(self.refresh_databases)
         actions_layout.addWidget(refresh_btn)
         
@@ -390,6 +384,16 @@ class MainWindow(QMainWindow):
         
         file_menu.addSeparator()
         
+        # Auto-connect toggle
+        self.auto_connect_action = QAction('Auto-Connect to Localhost', self)
+        self.auto_connect_action.setCheckable(True)
+        self.auto_connect_action.setChecked(self.config.database.auto_connect_localhost)
+        self.auto_connect_action.setStatusTip('Automatically connect to localhost MongoDB on startup')
+        self.auto_connect_action.toggled.connect(self.toggle_auto_connect)
+        file_menu.addAction(self.auto_connect_action)
+        
+        file_menu.addSeparator()
+        
         # Export actions
         export_action = QAction('&Export Data...', self)
         export_action.setShortcut(QKeySequence.SaveAs)
@@ -424,6 +428,46 @@ class MainWindow(QMainWindow):
         self.auto_refresh_action.toggled.connect(self.toggle_auto_refresh)
         view_menu.addAction(self.auto_refresh_action)
         
+        view_menu.addSeparator()
+        
+        # Theme submenu
+        theme_menu = view_menu.addMenu('&Themes')
+        theme_menu.setStatusTip('Change application theme')
+        
+        theme_action_group = QActionGroup(self)
+        
+        # Light theme
+        light_theme_action = QAction('&Light Theme', self)
+        light_theme_action.setCheckable(True)
+        light_theme_action.setChecked(theme_manager.get_current_theme() == ThemeType.LIGHT)
+        light_theme_action.triggered.connect(lambda: self.change_theme(ThemeType.LIGHT))
+        theme_action_group.addAction(light_theme_action)
+        theme_menu.addAction(light_theme_action)
+        
+        # Dark theme
+        dark_theme_action = QAction('&Dark Theme', self)
+        dark_theme_action.setCheckable(True)
+        dark_theme_action.setChecked(theme_manager.get_current_theme() == ThemeType.DARK)
+        dark_theme_action.triggered.connect(lambda: self.change_theme(ThemeType.DARK))
+        theme_action_group.addAction(dark_theme_action)
+        theme_menu.addAction(dark_theme_action)
+        
+        # Blue theme
+        blue_theme_action = QAction('&Blue Theme', self)
+        blue_theme_action.setCheckable(True)
+        blue_theme_action.setChecked(theme_manager.get_current_theme() == ThemeType.BLUE)
+        blue_theme_action.triggered.connect(lambda: self.change_theme(ThemeType.BLUE))
+        theme_action_group.addAction(blue_theme_action)
+        theme_menu.addAction(blue_theme_action)
+        
+        # Green theme
+        green_theme_action = QAction('&Green Theme', self)
+        green_theme_action.setCheckable(True)
+        green_theme_action.setChecked(theme_manager.get_current_theme() == ThemeType.GREEN)
+        green_theme_action.triggered.connect(lambda: self.change_theme(ThemeType.GREEN))
+        theme_action_group.addAction(green_theme_action)
+        theme_menu.addAction(green_theme_action)
+        
         # Tools menu
         tools_menu = menubar.addMenu('&Tools')
         
@@ -452,22 +496,32 @@ class MainWindow(QMainWindow):
         main_toolbar = self.addToolBar('Main')
         main_toolbar.setObjectName('MainToolBar')
         main_toolbar.setMovable(False)
+        main_toolbar.setToolButtonStyle(Qt.ToolButtonTextBesideIcon)
+        main_toolbar.setIconSize(QSize(20, 20))
         
         # Connection buttons
-        connect_btn = main_toolbar.addAction('Connect')
-        connect_btn.triggered.connect(self.show_connection_dialog)
+        connect_action = QAction(qta.icon('fa5s.plug', color='white'), 'Connect', self)
+        connect_action.setStatusTip('Connect to a MongoDB database')
+        connect_action.triggered.connect(self.show_connection_dialog)
+        main_toolbar.addAction(connect_action)
         
-        disconnect_btn = main_toolbar.addAction('Disconnect')
-        disconnect_btn.triggered.connect(self.disconnect_database)
+        disconnect_action = QAction(qta.icon('fa5s.times-circle', color='white'), 'Disconnect', self)
+        disconnect_action.setStatusTip('Disconnect from current database')
+        disconnect_action.triggered.connect(self.disconnect_database)
+        main_toolbar.addAction(disconnect_action)
         
         main_toolbar.addSeparator()
         
         # View buttons
-        refresh_btn = main_toolbar.addAction('Refresh')
-        refresh_btn.triggered.connect(self.refresh_current_view)
+        refresh_action = QAction(qta.icon('fa5s.sync-alt', color='white'), 'Refresh', self)
+        refresh_action.setStatusTip('Refresh current view')
+        refresh_action.triggered.connect(self.refresh_current_view)
+        main_toolbar.addAction(refresh_action)
         
-        export_btn = main_toolbar.addAction('Export')
-        export_btn.triggered.connect(self.export_data)
+        export_action = QAction(qta.icon('fa5s.download', color='white'), 'Export', self)
+        export_action.setStatusTip('Export current data to file')
+        export_action.triggered.connect(self.export_data)
+        main_toolbar.addAction(export_action)
     
     def create_status_bar(self):
         """Create the status bar."""
@@ -575,6 +629,30 @@ class MainWindow(QMainWindow):
             self.controller.connect_to_database(connection_info)
             self.update_recent_connections_menu()
     
+    def auto_connect_localhost(self):
+        """Automatically connect to localhost MongoDB on startup."""
+        # Check if auto-connect is enabled in configuration
+        if not self.config.database.auto_connect_localhost:
+            self.logger.info("Auto-connection to localhost is disabled in configuration")
+            return
+            
+        try:
+            # Create default localhost connection info using config values
+            localhost_connection = ConnectionInfo(
+                name="Localhost (Auto)",
+                host=self.config.database.default_host,
+                port=self.config.database.default_port,
+                auth_enabled=False
+            )
+            
+            # Attempt auto-connection
+            self.logger.info(f"Attempting auto-connection to {localhost_connection.host}:{localhost_connection.port}...")
+            self.controller.connect_to_database(localhost_connection)
+            
+        except Exception as e:
+            self.logger.warning(f"Auto-connection to localhost failed: {e}")
+            # Silently fail - user can manually connect if needed
+    
     def disconnect_database(self):
         """Disconnect from the current database."""
         self.controller.disconnect_from_database()
@@ -608,6 +686,15 @@ class MainWindow(QMainWindow):
             self.refresh_timer.stop()
             self.logger.info("Auto-refresh disabled")
     
+    def toggle_auto_connect(self, enabled: bool):
+        """Toggle auto-connect to localhost functionality."""
+        self.config.database.auto_connect_localhost = enabled
+        self.config.save_config()
+        if enabled:
+            self.logger.info("Auto-connect to localhost enabled")
+        else:
+            self.logger.info("Auto-connect to localhost disabled")
+    
     def auto_refresh(self):
         """Perform auto-refresh."""
         state = self.controller.get_application_state()
@@ -628,6 +715,16 @@ class MainWindow(QMainWindow):
         """Show the performance monitor dialog."""
         # TODO: Implement performance monitor
         show_info_message(self, "Performance Monitor", "Performance monitor coming soon!")
+    
+    def change_theme(self, theme: ThemeType):
+        """Change the application theme."""
+        try:
+            theme_manager.set_theme(theme)
+            self.logger.info(f"Changed theme to: {theme.value}")
+            show_info_message(self, "Theme Changed", f"Successfully changed to {theme.value.title()} theme!")
+        except Exception as e:
+            self.logger.error(f"Failed to change theme: {e}")
+            show_error_message(self, "Theme Error", f"Failed to change theme: {str(e)}")
     
     def show_about(self):
         """Show the about dialog."""

@@ -14,7 +14,7 @@ from PyQt5.QtWidgets import (
     QTableWidgetItem, QTreeWidget, QTreeWidgetItem, QSplitter, QGroupBox,
     QFormLayout, QLabel, QLineEdit, QPushButton, QSpinBox, QComboBox,
     QHeaderView, QAbstractItemView, QFrame, QProgressBar, QCheckBox,
-    QMessageBox
+    QMessageBox, QStyledItemDelegate
 )
 from PyQt5.QtCore import Qt, pyqtSignal, pyqtSlot, QTimer
 from PyQt5.QtGui import QFont, QTextCharFormat, QColor
@@ -26,7 +26,17 @@ from ..utils.helpers import (
     JsonFormatter, validate_json, validate_mongodb_query
 )
 from ..utils.logging_config import get_logger
+from ..styles.modern_styles import ModernStyles
+from ..styles.style_utils import StyleUtils
 from .syntax_highlighter import JsonSyntaxHighlighter
+
+
+class ItemSpacingDelegate(QStyledItemDelegate):
+    """Custom delegate to add spacing between items."""
+    def sizeHint(self, option, index):
+        size = super().sizeHint(option, index)
+        size.setHeight(size.height() + 15)  # Increase height to add spacing
+        return size
 
 
 class QueryWidget(QWidget):
@@ -42,32 +52,80 @@ class QueryWidget(QWidget):
     def init_ui(self):
         """Initialize the query widget UI (compact version)."""
         layout = QVBoxLayout(self)
-        layout.setContentsMargins(5, 5, 5, 5)
-        layout.setSpacing(4)
+        layout.setContentsMargins(6, 6, 6, 6)  # Reduced margins to fit more content
+        layout.setSpacing(6)  # Reduced spacing to make more room
         
         # Top row: Query type and options
         top_row = QHBoxLayout()
+        top_row.setSpacing(12)  # Add spacing between elements
         
-        top_row.addWidget(QLabel("Query:"))
+        # Query label (no borders)
+        query_label = QLabel("Query:")
+        query_label.setStyleSheet("""
+            QLabel {
+                border: none;
+                background: transparent;
+                padding: 0px;
+                margin: 0px;
+                color: #212121;
+                font-weight: 500;
+            }
+        """)
+        top_row.addWidget(query_label)
         
         self.query_type_combo = QComboBox()
         self.query_type_combo.addItems(["find", "count", "distinct", "aggregate"])
         self.query_type_combo.currentTextChanged.connect(self.on_query_type_changed)
-        self.query_type_combo.setMaximumWidth(100)
+        self.query_type_combo.view().window().setWindowFlags(Qt.Popup)
+        self.query_type_combo.setItemDelegate(ItemSpacingDelegate(self.query_type_combo))
+        self.query_type_combo.setMinimumWidth(120)  # Changed to minimum width
+        self.query_type_combo.setMaximumWidth(150)  # Increased max width
+        self.query_type_combo.setMinimumHeight(15)  # Set compact height
+        self.query_type_combo.setMaximumHeight(20)  # Limit maximum height
         top_row.addWidget(self.query_type_combo)
         
-        top_row.addWidget(QLabel("Limit:"))
+        # Limit label (no borders)
+        limit_label = QLabel("Limit:")
+        limit_label.setStyleSheet("""
+            QLabel {
+                border: none;
+                background: transparent;
+                padding: 0px;
+                margin: 0px;
+                color: #212121;
+                font-weight: 500;
+            }
+        """)
+        top_row.addWidget(limit_label)
         self.limit_spin = QSpinBox()
         self.limit_spin.setRange(1, 1000)
         self.limit_spin.setValue(100)
-        self.limit_spin.setMaximumWidth(80)
+        self.limit_spin.setMinimumWidth(80)  # Added minimum width
+        self.limit_spin.setMaximumWidth(100)  # Increased max width
+        self.limit_spin.setMinimumHeight(15)  # Set compact height
+        self.limit_spin.setMaximumHeight(20)  # Limit maximum height
         top_row.addWidget(self.limit_spin)
         
-        top_row.addWidget(QLabel("Skip:"))
+        # Skip label (no borders)
+        skip_label = QLabel("Skip:")
+        skip_label.setStyleSheet("""
+            QLabel {
+                border: none;
+                background: transparent;
+                padding: 0px;
+                margin: 0px;
+                color: #212121;
+                font-weight: 500;
+            }
+        """)
+        top_row.addWidget(skip_label)
         self.skip_spin = QSpinBox()
         self.skip_spin.setRange(0, 10000)
         self.skip_spin.setValue(0)
-        self.skip_spin.setMaximumWidth(80)
+        self.skip_spin.setMinimumWidth(80)  # Added minimum width
+        self.skip_spin.setMaximumWidth(100)  # Increased max width
+        self.skip_spin.setMinimumHeight(15)  # Set compact height
+        self.skip_spin.setMaximumHeight(20)  # Limit maximum height
         top_row.addWidget(self.skip_spin)
         
         top_row.addStretch()
@@ -75,23 +133,82 @@ class QueryWidget(QWidget):
         # Execute button
         self.execute_btn = QPushButton("Execute Query")
         self.execute_btn.setIcon(qta.icon('fa5s.play', color='white'))
+        self.execute_btn.setObjectName("execute_button")
         self.execute_btn.clicked.connect(self.execute_query)
-        self.execute_btn.setMaximumWidth(120)
+        self.execute_btn.setMinimumWidth(170)  # Increased minimum width for full text
+        self.execute_btn.setMaximumWidth(200)  # Increased max width to prevent cutting
+        self.execute_btn.setToolTip("Execute the MongoDB query")
+        self.execute_btn.setStyleSheet("""
+            QPushButton[objectName="execute_button"] {
+                background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
+                    stop:0 #9c27b0, stop:1 #6a1b9a) !important;
+                color: white !important;
+                border: none !important;
+                border-radius: 8px;
+                padding: 12px 24px;
+                font-weight: 600;
+                font-size: 14px;
+                min-height: 20px;
+                min-width: 120px;
+            }
+            
+            QPushButton[objectName="execute_button"]:hover {
+                background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
+                    stop:0 #ba68c8, stop:1 #8e24aa) !important;
+                color: white !important;
+            }
+            
+            QPushButton[objectName="execute_button"]:pressed {
+                background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
+                    stop:0 #6a1b9a, stop:1 #4a148c) !important;
+                color: white !important;
+            }
+        """)
         top_row.addWidget(self.execute_btn)
         
         # Clear button
         clear_btn = QPushButton("Clear")
-        clear_btn.setIcon(qta.icon('fa5s.eraser', color='#666'))
+        clear_btn.setIcon(qta.icon('fa5s.eraser', color='white'))
+        clear_btn.setObjectName("clear_button")
         clear_btn.clicked.connect(self.clear_query)
-        clear_btn.setMaximumWidth(60)
+        clear_btn.setMinimumWidth(100)  # Increased minimum width for full text
+        clear_btn.setMaximumWidth(120)  # Increased max width to prevent cutting
+        clear_btn.setToolTip("Clear the query and reset filters")
+        clear_btn.setStyleSheet("""
+            QPushButton[objectName="clear_button"] {
+                background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
+                    stop:0 #607d8b, stop:1 #37474f) !important;
+                color: white !important;
+                border: none !important;
+                border-radius: 8px;
+                padding: 12px 24px;
+                font-weight: 600;
+                font-size: 14px;
+                min-height: 20px;
+                min-width: 100px;
+            }
+
+            QPushButton[objectName="clear_button"]:hover {
+                background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
+                    stop:0 #78909c, stop:1 #455a64) !important;
+                color: white !important;
+            }
+
+            QPushButton[objectName="clear_button"]:pressed {
+                background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
+                    stop:0 #37474f, stop:1 #263238) !important;
+                color: white !important;
+            }
+        """)
         top_row.addWidget(clear_btn)
         
         layout.addLayout(top_row)
         
-        # Query text editor (much smaller)
+        # Query text editor (properly sized for comfortable editing)
         self.query_editor = QTextEdit()
-        self.query_editor.setFont(FontHelper.get_monospace_font(9))
-        self.query_editor.setMaximumHeight(50)  # Much smaller
+        self.query_editor.setFont(FontHelper.get_monospace_font(10))  # Slightly larger font
+        self.query_editor.setMinimumHeight(90)   # Increased for better visibility
+        self.query_editor.setMaximumHeight(100)  # Increased max height for comfortable editing
         self.query_editor.setPlaceholderText('Enter MongoDB query (e.g., {"status": "active"})')
         
         # Add syntax highlighting
@@ -387,14 +504,18 @@ class DocumentViewer(QWidget):
         # Use a splitter to control space allocation
         splitter = QSplitter(Qt.Vertical)
         
+        # Make splitter handle invisible and disable resizing
+        splitter.setHandleWidth(0)  # Hide the splitter handle
+        splitter.setChildrenCollapsible(False)  # Prevent collapsing
+        
         # Header with collection info and query widget (compact)
         self.create_header_section(splitter)
         
         # Main content with tabs (gets most of the space)
         self.create_content_tabs(splitter)
         
-        # Set splitter proportions: 25% for header/query, 75% for documents
-        splitter.setSizes([200, 600])  # Header gets 200px, documents get 600px
+        # Set fixed proportions - not resizable
+        splitter.setSizes([280, 600])  # Header gets 280px, documents get 600px
         splitter.setStretchFactor(0, 0)  # Header doesn't stretch
         splitter.setStretchFactor(1, 1)  # Documents area stretches
         
@@ -402,37 +523,94 @@ class DocumentViewer(QWidget):
     
     def create_header_section(self, parent_splitter):
         """Create the header section with collection info and query controls."""
-        header_group = QGroupBox("Collection & Query")
-        header_group.setMaximumHeight(180)  # Limit header height
-        header_layout = QVBoxLayout(header_group)
-        header_layout.setContentsMargins(10, 8, 10, 8)
-        header_layout.setSpacing(8)
+        # Use a regular widget instead of QGroupBox to remove title
+        header_widget = QWidget()
+        header_widget.setFixedHeight(280)  # Increased to 280px to accommodate all content
+        header_widget.setMinimumHeight(280)  # Ensure minimum height
+        
+        # Apply modern styling to the query area without title
+        header_widget.setStyleSheet(f"""
+            QWidget {{
+                background-color: {ModernStyles.COLORS['surface']};
+                border: 2px solid {ModernStyles.COLORS['border']};
+                border-radius: 12px;
+                margin: 8px;
+                padding: 16px;
+            }}
+        """)
+        
+        header_layout = QVBoxLayout(header_widget)
+        header_layout.setContentsMargins(16, 16, 16, 16)  # Balanced margins
+        header_layout.setSpacing(12)  # Reduced spacing to fit content better
         
         # Collection info (more compact)
         info_layout = QHBoxLayout()
         
         collection_info = QLabel("No collection selected")
-        collection_info.setStyleSheet("font-weight: bold; color: #1976d2; margin-right: 15px;")
+        collection_info.setStyleSheet(f"""
+            font-weight: bold; 
+            color: {ModernStyles.COLORS['primary']}; 
+            background-color: {ModernStyles.COLORS['background']};
+            padding: 8px 16px;
+            border-radius: 6px;
+            margin-right: 15px;
+            font-size: 16px;
+        """)
         self.collection_label = collection_info
-        info_layout.addWidget(QLabel("Collection:"))
+        
+        # Collection label (no borders)
+        collection_label_text = QLabel("Collection:")
+        collection_label_text.setStyleSheet("""
+            QLabel {
+                border: none;
+                background: transparent;
+                padding: 0px;
+                margin: 0px;
+                color: #212121;
+                font-weight: 500;
+                font-size: 14px;
+            }
+        """)
+        info_layout.addWidget(collection_label_text)
         info_layout.addWidget(collection_info)
         
         info_layout.addStretch()
         
         count_info = QLabel("0 documents")
-        count_info.setStyleSheet("color: #666;")
+        count_info.setStyleSheet(f"""
+            color: {ModernStyles.COLORS['text_secondary']};
+            background-color: {ModernStyles.COLORS['background']};
+            padding: 6px 12px;
+            border-radius: 4px;
+            font-weight: 500;
+        """)
         self.count_label = count_info
-        info_layout.addWidget(QLabel("Count:"))
+        
+        # Count label (no borders)
+        count_label_text = QLabel("Count:")
+        count_label_text.setStyleSheet("""
+            QLabel {
+                border: none;
+                background: transparent;
+                padding: 0px;
+                margin: 0px;
+                color: #212121;
+                font-weight: 500;
+                font-size: 14px;
+            }
+        """)
+        info_layout.addWidget(count_label_text)
         info_layout.addWidget(count_info)
         
         header_layout.addLayout(info_layout)
         
-        # Query widget (compact version)
+        # Query widget (properly sized for comfortable use)
         self.query_widget = QueryWidget()
-        self.query_widget.setMaximumHeight(120)  # Limit query widget height
+        self.query_widget.setMinimumHeight(160)  # Increased to provide more space
+        self.query_widget.setMaximumHeight(180)  # Increased max height for comfortable editing
         header_layout.addWidget(self.query_widget)
         
-        parent_splitter.addWidget(header_group)
+        parent_splitter.addWidget(header_widget)
     
     def create_content_tabs(self, parent_splitter):
         """Create the main content area with tabs."""
@@ -638,17 +816,18 @@ class DocumentViewer(QWidget):
         """Create a MongoDB Compass-style document card."""
         # Main card frame
         card = QFrame()
-        card.setStyleSheet("""
-            QFrame {
-                background-color: white;
-                border: 1px solid #e0e0e0;
-                border-radius: 8px;
-                margin: 2px;
-            }
-            QFrame:hover {
-                border-color: #1976d2;
-                background-color: #fafafa;
-            }
+        card.setStyleSheet(f"""
+            QFrame {{
+                background-color: {ModernStyles.COLORS['surface']};
+                border: 1px solid {ModernStyles.COLORS['border']};
+                border-radius: 12px;
+                margin: 4px 0px;
+            }}
+            QFrame:hover {{
+                border-color: {ModernStyles.COLORS['primary']};
+                background-color: {ModernStyles.COLORS['hover']};
+                box-shadow: 0 4px 12px {ModernStyles.COLORS['shadow']};
+            }}
         """)
         card.setContentsMargins(0, 0, 0, 0)
         
@@ -662,20 +841,26 @@ class DocumentViewer(QWidget):
         
         # Document number
         doc_number = QLabel(f"Document {index + 1}")
-        doc_number.setStyleSheet("""
+        doc_number.setStyleSheet(f"""
             font-weight: bold;
-            color: #1976d2;
+            color: {ModernStyles.COLORS['primary']};
             font-size: 14px;
+            padding: 4px 8px;
+            background-color: {ModernStyles.COLORS['background']};
+            border-radius: 6px;
         """)
         header_layout.addWidget(doc_number)
         
         # Object ID (if present)
         if '_id' in document:
             id_label = QLabel(f"ObjectId: {str(document['_id'])}")
-            id_label.setStyleSheet("""
-                color: #666;
-                font-family: 'Courier New', monospace;
+            id_label.setStyleSheet(f"""
+                color: {ModernStyles.COLORS['text_secondary']};
+                font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
                 font-size: 12px;
+                padding: 4px 8px;
+                background-color: {ModernStyles.COLORS['background']};
+                border-radius: 4px;
             """)
             header_layout.addWidget(id_label)
         

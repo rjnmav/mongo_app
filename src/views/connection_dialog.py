@@ -10,14 +10,20 @@ from PyQt5.QtWidgets import (
     QDialog, QVBoxLayout, QHBoxLayout, QFormLayout, QTabWidget, QWidget,
     QLineEdit, QSpinBox, QCheckBox, QPushButton, QLabel, QGroupBox,
     QComboBox, QTextEdit, QProgressBar, QListWidget, QListWidgetItem,
-    QSplitter, QFrame, QMessageBox
+    QSplitter, QFrame, QMessageBox, QSizePolicy, QApplication,
+    QGraphicsDropShadowEffect
 )
-from PyQt5.QtCore import Qt, QThread, pyqtSignal, pyqtSlot, QTimer
-from PyQt5.QtGui import QFont, QIcon
+from PyQt5.QtCore import Qt, QThread, pyqtSignal, pyqtSlot, QTimer, QPoint
+from PyQt5.QtGui import QFont, QIcon, QPixmap, QPainter, QColor, QLinearGradient
+import qtawesome as qta
 
 from ..models.data_models import ConnectionInfo, ConnectionStatus
 from ..utils.helpers import show_error_message, show_info_message
 from ..utils.logging_config import get_logger
+from ..styles.modern_styles import ModernStyles
+
+
+# CustomTitleBar class has been removed as it's no longer needed
 
 
 class ConnectionTestWorker(QThread):
@@ -58,39 +64,156 @@ class RecentConnectionsWidget(QWidget):
     def init_ui(self):
         """Initialize the recent connections UI."""
         layout = QVBoxLayout(self)
+        layout.setContentsMargins(15, 15, 15, 15)
+        layout.setSpacing(12)
         
         # Header
         header_label = QLabel("Recent Connections")
         header_font = QFont()
         header_font.setBold(True)
+        header_font.setPointSize(16)
         header_label.setFont(header_font)
+        header_label.setStyleSheet("""
+            QLabel {
+                color: #1976d2;
+                padding: 8px 0px;
+                font-size: 20px;
+                font-weight: bold;
+                border: none;
+                background: transparent;
+                margin: 0px;
+            }
+        """)
         layout.addWidget(header_label)
         
         # Instruction label
         instruction_label = QLabel("Click on a connection to connect immediately")
-        instruction_label.setStyleSheet("color: #666; font-size: 11px; font-style: italic;")
+        instruction_label.setStyleSheet("""
+            QLabel {
+                color: #666; 
+                font-size: 13px; 
+                font-style: italic;
+                padding: 0px 0px 8px 0px;
+                border: none;
+                background: transparent;
+                margin: 0px;
+            }
+        """)
         layout.addWidget(instruction_label)
         
         # Connections list
         self.connections_list = QListWidget()
+        self.connections_list.setMinimumHeight(220)
+        self.connections_list.setStyleSheet("""
+            QListWidget {
+                background-color: white;
+                border: 2px solid #e0e0e0;
+                border-radius: 8px;
+                padding: 8px;
+                font-size: 14px;
+                selection-background-color: #e3f2fd;
+                selection-color: #1976d2;
+                outline: none;
+            }
+            QListWidget::item {
+                padding: 14px 12px;
+                border-bottom: 1px solid #f0f0f0;
+                min-height: 24px;
+                border-radius: 4px;
+                margin: 2px 0px;
+            }
+            QListWidget::item:hover {
+                background-color: #f5f5f5;
+                border: 1px solid #e0e0e0;
+            }
+            QListWidget::item:selected {
+                background-color: #e3f2fd;
+                color: #1976d2;
+                font-weight: 500;
+                border: 1px solid #1976d2;
+            }
+        """)
         self.connections_list.itemDoubleClicked.connect(self.on_connection_double_clicked)
         self.connections_list.itemClicked.connect(self.on_connection_clicked)
         layout.addWidget(self.connections_list)
         
         # Buttons
         button_layout = QHBoxLayout()
+        button_layout.setSpacing(10)
+        button_layout.setContentsMargins(0, 10, 0, 0)
         
         connect_btn = QPushButton("Connect")
+        connect_btn.setMinimumHeight(40)
+        connect_btn.setMinimumWidth(90)
+        connect_btn.setStyleSheet("""
+            QPushButton {
+                background-color: #1976d2;
+                color: white;
+                border: none;
+                padding: 10px 18px;
+                border-radius: 6px;
+                font-weight: 500;
+                font-size: 14px;
+                text-align: center;
+            }
+            QPushButton:hover {
+                background-color: #1565c0;
+            }
+            QPushButton:pressed {
+                background-color: #0d47a1;
+            }
+        """)
         connect_btn.clicked.connect(self.connect_selected)
         button_layout.addWidget(connect_btn)
         
         remove_btn = QPushButton("Remove")
+        remove_btn.setMinimumHeight(40)
+        remove_btn.setMinimumWidth(90)
+        remove_btn.setStyleSheet("""
+            QPushButton {
+                background-color: #f44336;
+                color: white;
+                border: none;
+                padding: 10px 18px;
+                border-radius: 6px;
+                font-weight: 500;
+                font-size: 14px;
+                text-align: center;
+            }
+            QPushButton:hover {
+                background-color: #d32f2f;
+            }
+            QPushButton:pressed {
+                background-color: #b71c1c;
+            }
+        """)
         remove_btn.clicked.connect(self.remove_selected)
         button_layout.addWidget(remove_btn)
         
         button_layout.addStretch()
         
-        refresh_btn = QPushButton("Refresh")
+        refresh_btn = QPushButton("🔄")
+        refresh_btn.setToolTip("Refresh connections list")
+        refresh_btn.setMinimumHeight(40)
+        refresh_btn.setMinimumWidth(50)
+        refresh_btn.setStyleSheet("""
+            QPushButton {
+                background-color: #4caf50;
+                color: white;
+                border: none;
+                padding: 10px 14px;
+                border-radius: 6px;
+                font-weight: 500;
+                font-size: 16px;
+                text-align: center;
+            }
+            QPushButton:hover {
+                background-color: #388e3c;
+            }
+            QPushButton:pressed {
+                background-color: #2e7d32;
+            }
+        """)
         refresh_btn.clicked.connect(self.load_recent_connections)
         button_layout.addWidget(refresh_btn)
         
@@ -102,17 +225,32 @@ class RecentConnectionsWidget(QWidget):
         
         recent_connections = self.controller.get_recent_connections()
         for connection in recent_connections:
-            item = QListWidgetItem(connection.get_display_name())
+            # Create a more detailed display name
+            display_name = connection.get_display_name()
+            if len(display_name) > 30:  # Prevent text cutting
+                display_name = display_name[:28] + "..."
+            
+            item = QListWidgetItem(display_name)
             item.setData(Qt.UserRole, connection)
             
-            # Add tooltip with connection details
-            tooltip = f"Host: {connection.host}:{connection.port}\n"
+            # Set item font for better readability
+            font = QFont()
+            font.setPointSize(14)
+            font.setWeight(QFont.Medium)
+            item.setFont(font)
+            
+            # Add detailed tooltip with connection details
+            tooltip = f"Connection: {connection.name or 'Unnamed'}\n"
+            tooltip += f"Host: {connection.host}:{connection.port}\n"
             if connection.auth_enabled:
                 tooltip += f"Username: {connection.username}\n"
                 tooltip += f"Auth DB: {connection.auth_database}"
             else:
-                tooltip += "No authentication"
+                tooltip += "Authentication: Disabled"
             item.setToolTip(tooltip)
+            
+            # Set proper size hint to prevent cutting
+            item.setSizeHint(item.sizeHint())
             
             self.connections_list.addItem(item)
     
@@ -154,57 +292,166 @@ class BasicConnectionWidget(QWidget):
     def init_ui(self):
         """Initialize the basic connection UI."""
         layout = QVBoxLayout(self)
+        layout.setContentsMargins(20, 15, 20, 15)
+        layout.setSpacing(20)
         
         # Connection settings
         connection_group = QGroupBox("Connection Settings")
+        connection_group.setStyleSheet("""
+            QGroupBox {
+                font-size: 15px;
+                font-weight: bold;
+                color: #1976d2;
+                border: 2px solid #e0e0e0;
+                border-radius: 10px;
+                margin-top: 10px;
+                padding: 10px;
+            }
+            QGroupBox::title {
+                subcontrol-origin: margin;
+                left: 15px;
+                padding: 5px 10px;
+                background-color: white;
+                border-radius: 5px;
+                background: qlineargradient(y1:0, y2:1, stop:0 #ffffff, stop:1 #f0f0f0);
+            }
+        """)
         connection_layout = QFormLayout(connection_group)
+        connection_layout.setVerticalSpacing(15)
+        connection_layout.setLabelAlignment(Qt.AlignRight)
         
         # Connection name
         self.name_edit = QLineEdit()
         self.name_edit.setPlaceholderText("Optional connection name")
-        connection_layout.addRow("Name:", self.name_edit)
+        self.name_edit.setMinimumHeight(35)
+        self.name_edit.setStyleSheet(self._get_input_style())
+        connection_layout.addRow(self._create_label("Name:"), self.name_edit)
         
         # Host
         self.host_edit = QLineEdit("localhost")
         self.host_edit.setPlaceholderText("MongoDB server address")
-        connection_layout.addRow("Host:", self.host_edit)
+        self.host_edit.setMinimumHeight(35)
+        self.host_edit.setStyleSheet(self._get_input_style())
+        connection_layout.addRow(self._create_label("Host:"), self.host_edit)
         
         # Port
         self.port_spin = QSpinBox()
         self.port_spin.setRange(1, 65535)
         self.port_spin.setValue(27017)
-        connection_layout.addRow("Port:", self.port_spin)
+        self.port_spin.setMinimumHeight(35)
+        self.port_spin.setStyleSheet(self._get_input_style())
+        connection_layout.addRow(self._create_label("Port:"), self.port_spin)
         
         layout.addWidget(connection_group)
         
         # Authentication settings
         auth_group = QGroupBox("Authentication")
+        auth_group.setStyleSheet("""
+            QGroupBox {
+                font-size: 15px;
+                font-weight: bold;
+                color: #1976d2;
+                border: 2px solid #e0e0e0;
+                border-radius: 10px;
+                margin-top: 10px;
+                padding: 10px;
+            }
+            QGroupBox::title {
+                subcontrol-origin: margin;
+                left: 15px;
+                padding: 5px 10px;
+                background-color: white;
+                border-radius: 5px;
+                background: qlineargradient(y1:0, y2:1, stop:0 #ffffff, stop:1 #f0f0f0);
+            }
+        """)
         auth_layout = QFormLayout(auth_group)
+        auth_layout.setVerticalSpacing(15)
+        auth_layout.setLabelAlignment(Qt.AlignRight)
         
         # Enable authentication
         self.auth_enabled_cb = QCheckBox("Enable Authentication")
+        self.auth_enabled_cb.setStyleSheet("""
+            QCheckBox {
+                font-size: 14px;
+                font-weight: 500;
+                spacing: 8px;
+                color: #333;
+            }
+            QCheckBox::indicator {
+                width: 18px;
+                height: 18px;
+                border-radius: 3px;
+                border: 2px solid #1976d2;
+            }
+            QCheckBox::indicator:checked {
+                background-color: #1976d2;
+                image: url(data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMTAiIGhlaWdodD0iOCIgdmlld0JveD0iMCAwIDEwIDgiIGZpbGw9Im5vbmUiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+CjxwYXRoIGQ9Ik05IDFMMy41IDdMMSA0LjUiIHN0cm9rZT0id2hpdGUiIHN0cm9rZS13aWR0aD0iMiIgc3Ryb2tlLWxpbmVjYXA9InJvdW5kIiBzdHJva2UtbGluZWpvaW49InJvdW5kIi8+Cjwvc3ZnPgo=);
+            }
+        """)
         self.auth_enabled_cb.toggled.connect(self.toggle_auth_fields)
         auth_layout.addRow(self.auth_enabled_cb)
         
         # Username
         self.username_edit = QLineEdit()
         self.username_edit.setEnabled(False)
-        auth_layout.addRow("Username:", self.username_edit)
+        self.username_edit.setMinimumHeight(35)
+        self.username_edit.setStyleSheet(self._get_input_style())
+        auth_layout.addRow(self._create_label("Username:"), self.username_edit)
         
         # Password
         self.password_edit = QLineEdit()
         self.password_edit.setEchoMode(QLineEdit.Password)
         self.password_edit.setEnabled(False)
-        auth_layout.addRow("Password:", self.password_edit)
-        
+        self.password_edit.setMinimumHeight(35)
+        self.password_edit.setStyleSheet(self._get_input_style())
+        auth_layout.addRow(self._create_label("Password:"), self.password_edit)
+
         # Authentication database
         self.auth_db_edit = QLineEdit("admin")
         self.auth_db_edit.setEnabled(False)
-        auth_layout.addRow("Auth Database:", self.auth_db_edit)
+        self.auth_db_edit.setMinimumHeight(35)
+        self.auth_db_edit.setStyleSheet(self._get_input_style())
+        auth_layout.addRow(self._create_label("Auth Database:"), self.auth_db_edit)
         
         layout.addWidget(auth_group)
         
         layout.addStretch()
+    
+    def _create_label(self, text):
+        """Create a styled label for form fields."""
+        label = QLabel(text)
+        label.setStyleSheet("""
+            QLabel {
+                font-size: 14px;
+                font-weight: 600;
+                color: #333;
+                min-width: 120px;
+            }
+        """)
+        return label
+    
+    def _get_input_style(self):
+        """Get the common input field style."""
+        return """
+            QLineEdit, QSpinBox {
+                border: 2px solid #e0e0e0;
+                border-radius: 6px;
+                padding: 8px 12px;
+                font-size: 14px;
+                background-color: white;
+                selection-background-color: #1976d2;
+            }
+            QLineEdit:focus, QSpinBox:focus {
+                border-color: #1976d2;
+                outline: none;
+            }
+            QLineEdit:disabled, QSpinBox:disabled {
+                background-color: #f5f5f5;
+                color: #999;
+                border-color: #ccc;
+            }
+        """
     
     def toggle_auth_fields(self, enabled: bool):
         """Enable/disable authentication fields."""
@@ -251,52 +498,177 @@ class AdvancedConnectionWidget(QWidget):
     def init_ui(self):
         """Initialize the advanced connection UI."""
         layout = QVBoxLayout(self)
+        layout.setContentsMargins(20, 15, 20, 15)
+        layout.setSpacing(20)
         
         # Timeout settings
         timeout_group = QGroupBox("Timeout Settings")
+        timeout_group.setStyleSheet("""
+            QGroupBox {
+                font-size: 15px;
+                font-weight: bold;
+                color: #1976d2;
+                border: 2px solid #e0e0e0;
+                border-radius: 10px;
+                margin-top: 10px;
+                padding: 10px;
+            }
+            QGroupBox::title {
+                subcontrol-origin: margin;
+                left: 15px;
+                padding: 5px 10px;
+                background-color: white;
+                border-radius: 5px;
+                background: qlineargradient(y1:0, y2:1, stop:0 #ffffff, stop:1 #f0f0f0);
+            }
+        """)
         timeout_layout = QFormLayout(timeout_group)
+        timeout_layout.setVerticalSpacing(15)
+        timeout_layout.setLabelAlignment(Qt.AlignRight)
         
         self.connection_timeout_spin = QSpinBox()
         self.connection_timeout_spin.setRange(1000, 60000)
         self.connection_timeout_spin.setValue(5000)
         self.connection_timeout_spin.setSuffix(" ms")
-        timeout_layout.addRow("Connection Timeout:", self.connection_timeout_spin)
+        self.connection_timeout_spin.setMinimumHeight(35)
+        self.connection_timeout_spin.setStyleSheet(self._get_input_style())
+        timeout_layout.addRow(self._create_label("Connection Timeout:"), self.connection_timeout_spin)
         
         self.server_selection_timeout_spin = QSpinBox()
         self.server_selection_timeout_spin.setRange(1000, 60000)
         self.server_selection_timeout_spin.setValue(5000)
         self.server_selection_timeout_spin.setSuffix(" ms")
-        timeout_layout.addRow("Server Selection Timeout:", self.server_selection_timeout_spin)
+        self.server_selection_timeout_spin.setMinimumHeight(35)
+        self.server_selection_timeout_spin.setStyleSheet(self._get_input_style())
+        timeout_layout.addRow(self._create_label("Server Selection Timeout:"), self.server_selection_timeout_spin)
         
         layout.addWidget(timeout_group)
         
         # SSL settings
         ssl_group = QGroupBox("SSL/TLS Settings")
+        ssl_group.setStyleSheet("""
+            QGroupBox {
+                font-size: 15px;
+                font-weight: bold;
+                color: #1976d2;
+                border: 2px solid #e0e0e0;
+                border-radius: 10px;
+                margin-top: 10px;
+                padding: 10px;
+            }
+            QGroupBox::title {
+                subcontrol-origin: margin;
+                left: 15px;
+                padding: 5px 10px;
+                background-color: white;
+                border-radius: 5px;
+                background: qlineargradient(y1:0, y2:1, stop:0 #ffffff, stop:1 #f0f0f0);
+            }
+        """)
         ssl_layout = QFormLayout(ssl_group)
+        ssl_layout.setVerticalSpacing(15)
+        ssl_layout.setLabelAlignment(Qt.AlignRight)
         
         self.ssl_enabled_cb = QCheckBox("Enable SSL/TLS")
+        self.ssl_enabled_cb.setStyleSheet("""
+            QCheckBox {
+                font-size: 14px;
+                font-weight: 500;
+                spacing: 8px;
+                color: #333;
+            }
+            QCheckBox::indicator {
+                width: 18px;
+                height: 18px;
+                border-radius: 3px;
+                border: 2px solid #1976d2;
+            }
+            QCheckBox::indicator:checked {
+                background-color: #1976d2;
+            }
+        """)
         self.ssl_enabled_cb.toggled.connect(self.toggle_ssl_fields)
         ssl_layout.addRow(self.ssl_enabled_cb)
         
         self.ssl_cert_edit = QLineEdit()
         self.ssl_cert_edit.setEnabled(False)
         self.ssl_cert_edit.setPlaceholderText("Path to SSL certificate file")
-        ssl_layout.addRow("Certificate File:", self.ssl_cert_edit)
+        self.ssl_cert_edit.setMinimumHeight(35)
+        self.ssl_cert_edit.setStyleSheet(self._get_input_style())
+        ssl_layout.addRow(self._create_label("Certificate File:"), self.ssl_cert_edit)
         
         layout.addWidget(ssl_group)
         
         # Connection pool settings
         pool_group = QGroupBox("Connection Pool")
+        pool_group.setStyleSheet("""
+            QGroupBox {
+                font-size: 15px;
+                font-weight: bold;
+                color: #1976d2;
+                border: 2px solid #e0e0e0;
+                border-radius: 10px;
+                margin-top: 10px;
+                padding: 10px;
+            }
+            QGroupBox::title {
+                subcontrol-origin: margin;
+                left: 15px;
+                padding: 5px 10px;
+                background-color: white;
+                border-radius: 5px;
+                background: qlineargradient(y1:0, y2:1, stop:0 #ffffff, stop:1 #f0f0f0);
+            }
+        """)
         pool_layout = QFormLayout(pool_group)
+        pool_layout.setVerticalSpacing(15)
+        pool_layout.setLabelAlignment(Qt.AlignRight)
         
         self.max_pool_size_spin = QSpinBox()
         self.max_pool_size_spin.setRange(1, 100)
         self.max_pool_size_spin.setValue(50)
-        pool_layout.addRow("Max Pool Size:", self.max_pool_size_spin)
+        self.max_pool_size_spin.setMinimumHeight(35)
+        self.max_pool_size_spin.setStyleSheet(self._get_input_style())
+        pool_layout.addRow(self._create_label("Max Pool Size:"), self.max_pool_size_spin)
         
         layout.addWidget(pool_group)
         
         layout.addStretch()
+    
+    def _create_label(self, text):
+        """Create a styled label for form fields."""
+        label = QLabel(text)
+        label.setStyleSheet("""
+            QLabel {
+                font-size: 14px;
+                font-weight: 600;
+                color: #333;
+                min-width: 150px;
+            }
+        """)
+        return label
+    
+    def _get_input_style(self):
+        """Get the common input field style."""
+        return """
+            QLineEdit, QSpinBox {
+                border: 2px solid #e0e0e0;
+                border-radius: 6px;
+                padding: 8px 12px;
+                font-size: 14px;
+                background-color: white;
+                selection-background-color: #1976d2;
+            }
+            QLineEdit:focus, QSpinBox:focus {
+                border-color: #1976d2;
+                outline: none;
+            }
+            QLineEdit:disabled, QSpinBox:disabled {
+                background-color: #f5f5f5;
+                color: #999;
+                border-color: #ccc;
+            }
+        """
     
     def toggle_ssl_fields(self, enabled: bool):
         """Enable/disable SSL fields."""
@@ -324,6 +696,8 @@ class ConnectionDialog(QDialog):
         self.controller = controller
         self.logger = get_logger(__name__)
         self.test_worker = None
+        self.dragging = False
+        self.drag_position = None
         
         self.init_ui()
         self.setup_connections()
@@ -331,36 +705,107 @@ class ConnectionDialog(QDialog):
     def init_ui(self):
         """Initialize the dialog UI."""
         self.setWindowTitle("Connect to MongoDB")
+        # Set frameless window flags
+        self.setWindowFlags(Qt.FramelessWindowHint | Qt.Dialog)
+        self.setWindowModality(Qt.ApplicationModal)
+        self.setAttribute(Qt.WA_TranslucentBackground)
         self.setModal(True)
-        self.resize(600, 500)
         
         # Main layout
         layout = QVBoxLayout(self)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(0)
+        
+        # Content area
+        content_widget = QWidget()
+        content_widget.setStyleSheet("background-color: #fafafa; border-radius: 12px;")
+        content_layout = QVBoxLayout(content_widget)
+        content_layout.setContentsMargins(25, 20, 25, 25)
+        content_layout.setSpacing(15)
         
         # Title
         title_label = QLabel("MongoDB Connection")
         title_font = QFont()
         title_font.setBold(True)
-        title_font.setPointSize(14)
+        title_font.setPointSize(20)
         title_label.setFont(title_font)
         title_label.setAlignment(Qt.AlignCenter)
-        layout.addWidget(title_label)
+        title_label.setStyleSheet("""
+            QLabel {
+                color: black;
+                padding: 15px 0px;
+                background: transparent;
+                border: none;
+                margin: 0px;
+                font-size: 24px;
+                font-weight: bold;
+            }
+        """)
+        content_layout.addWidget(title_label)
         
-        # Main content splitter
-        splitter = QSplitter(Qt.Horizontal)
-        layout.addWidget(splitter)
+        # Main content horizontal layout
+        main_layout = QHBoxLayout()
+        main_layout.setSpacing(15)
+        main_layout.setContentsMargins(0, 0, 0, 0)
         
         # Recent connections (left side)
         if self.controller:
             self.recent_widget = RecentConnectionsWidget(self.controller)
-            splitter.addWidget(self.recent_widget)
+            self.recent_widget.setMinimumWidth(350)
+            self.recent_widget.setMaximumWidth(400)
+            self.recent_widget.setStyleSheet("""
+                RecentConnectionsWidget {
+                    background-color: white;
+                    border-radius: 10px;
+                    border: 1px solid #e0e0e0;
+                }
+            """)
+            main_layout.addWidget(self.recent_widget)
         
         # Connection settings (right side)
         settings_widget = QWidget()
+        settings_widget.setMinimumWidth(450)
+        settings_widget.setStyleSheet("""
+            QWidget {
+                background-color: transparent;
+                border-radius: 10px;
+                border: none;
+            }
+        """)
         settings_layout = QVBoxLayout(settings_widget)
+        settings_layout.setContentsMargins(0, 10, 0, 0)
         
-        # Tab widget for connection settings
+        # Tab widget for connection settings with cleaner styling
         self.tab_widget = QTabWidget()
+        self.tab_widget.setStyleSheet("""
+            QTabWidget::pane {
+                border: 2px solid #e0e0e0;
+                background-color: white;
+                margin-top: 0px;
+            }
+            QTabWidget::tab-bar {
+                alignment: left;
+            }
+            QTabBar::tab {
+                background-color: transparent;
+                color: #666;
+                padding: 14px 28px;
+                margin-right: 4px;
+                border: 2px solid #e0e0e0;
+                font-size: 14px;
+                font-weight: 500;
+                min-width: 100px;
+                border-bottom: 3px solid #e0e0e0;
+            }
+            QTabBar::tab:selected {
+                color: #1976d2;
+                font-weight: 600;
+                border-bottom: 3px solid #1976d2;
+            }
+            QTabBar::tab:hover:!selected {
+                color: #1976d2;
+            }
+        """)
         
         # Basic settings tab
         self.basic_widget = BasicConnectionWidget()
@@ -371,40 +816,157 @@ class ConnectionDialog(QDialog):
         self.tab_widget.addTab(self.advanced_widget, "Advanced")
         
         settings_layout.addWidget(self.tab_widget)
-        splitter.addWidget(settings_widget)
+        main_layout.addWidget(settings_widget)
         
-        # Set splitter proportions
-        splitter.setSizes([250, 350])
+        # Add the horizontal layout to the content layout
+        content_layout.addLayout(main_layout)
         
         # Progress bar (hidden initially)
         self.progress_bar = QProgressBar()
         self.progress_bar.setVisible(False)
-        layout.addWidget(self.progress_bar)
+        self.progress_bar.setStyleSheet("""
+            QProgressBar {
+                border: 2px solid #e0e0e0;
+                border-radius: 6px;
+                text-align: center;
+                font-weight: 500;
+                background-color: #f5f5f5;
+            }
+            QProgressBar::chunk {
+                background: qlineargradient(x1:0, y1:0, x2:1, y2:0,
+                    stop:0 #1976d2, stop:1 #42a5f5);
+                border-radius: 4px;
+            }
+        """)
+        content_layout.addWidget(self.progress_bar)
         
         # Status label
         self.status_label = QLabel("")
         self.status_label.setWordWrap(True)
-        layout.addWidget(self.status_label)
+        self.status_label.setMinimumHeight(25)
+        self.status_label.setStyleSheet("""
+            QLabel {
+                font-size: 13px;
+                padding: 5px 10px;
+                border-radius: 5px;
+                background-color: transparent;
+            }
+        """)
+        content_layout.addWidget(self.status_label)
         
         # Buttons
         button_layout = QHBoxLayout()
+        button_layout.setSpacing(15)
+        button_layout.setContentsMargins(0, 20, 0, 0)
         
         self.test_btn = QPushButton("Test Connection")
+        self.test_btn.setIcon(qta.icon('fa5s.vial', color='white'))
+        self.test_btn.setObjectName("test_button")
+        self.test_btn.setMinimumHeight(45)
+        self.test_btn.setMinimumWidth(140)
+        self.test_btn.setToolTip("Test the database connection")
+        self.test_btn.setStyleSheet("""
+            QPushButton {
+                background-color: #ff9800;
+                color: white;
+                border: none;
+                padding: 12px 24px;
+                border-radius: 8px;
+                font-weight: 600;
+                font-size: 14px;
+                text-align: center;
+                box-shadow: 0 2px 4px rgba(255, 152, 0, 0.3);
+            }
+            QPushButton:hover {
+                background-color: #f57c00;
+                box-shadow: 0 3px 6px rgba(255, 152, 0, 0.4);
+            }
+            QPushButton:pressed {
+                background-color: #ef6c00;
+                box-shadow: 0 1px 2px rgba(255, 152, 0, 0.2);
+            }
+            QPushButton:disabled {
+                background-color: #ccc;
+                color: #999;
+                box-shadow: none;
+            }
+        """)
         self.test_btn.clicked.connect(self.test_connection)
         button_layout.addWidget(self.test_btn)
         
         button_layout.addStretch()
         
         self.cancel_btn = QPushButton("Cancel")
+        self.cancel_btn.setIcon(qta.icon('fa5s.times', color='#666'))
+        self.cancel_btn.setObjectName("cancel_button")
+        self.cancel_btn.setMinimumHeight(45)
+        self.cancel_btn.setMinimumWidth(110)
+        self.cancel_btn.setToolTip("Cancel connection")
+        self.cancel_btn.setStyleSheet("""
+            QPushButton {
+                background-color: transparent;
+                color: #666;
+                border: 2px solid #e0e0e0;
+                padding: 12px 24px;
+                border-radius: 8px;
+                font-weight: 600;
+                font-size: 14px;
+                text-align: center;
+            }
+            QPushButton:hover {
+                background-color: #f5f5f5;
+                border-color: #ccc;
+                color: #333;
+            }
+            QPushButton:pressed {
+                background-color: #e0e0e0;
+                border-color: #999;
+            }
+        """)
         self.cancel_btn.clicked.connect(self.reject)
         button_layout.addWidget(self.cancel_btn)
         
         self.connect_btn = QPushButton("Connect")
+        self.connect_btn.setIcon(qta.icon('fa5s.plug', color='white'))
+        self.connect_btn.setObjectName("connect_button")
         self.connect_btn.setDefault(True)
+        self.connect_btn.setMinimumHeight(45)
+        self.connect_btn.setMinimumWidth(130)
+        self.connect_btn.setToolTip("Connect to the database")
+        self.connect_btn.setStyleSheet("""
+            QPushButton {
+                background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
+                    stop:0 #4caf50, stop:1 #2e7d32);
+                color: white;
+                border: none;
+                padding: 12px 24px;
+                border-radius: 8px;
+                font-weight: 600;
+                font-size: 14px;
+                text-align: center;
+                box-shadow: 0 3px 6px rgba(76, 175, 80, 0.3);
+            }
+            QPushButton:hover {
+                background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
+                    stop:0 #66bb6a, stop:1 #388e3c);
+                box-shadow: 0 4px 8px rgba(76, 175, 80, 0.4);
+            }
+            QPushButton:pressed {
+                background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
+                    stop:0 #2e7d32, stop:1 #1b5e20);
+                box-shadow: 0 2px 4px rgba(76, 175, 80, 0.2);
+            }
+            QPushButton:disabled {
+                background-color: #ccc;
+                color: #999;
+                box-shadow: none;
+            }
+        """)
         self.connect_btn.clicked.connect(self.accept)
         button_layout.addWidget(self.connect_btn)
         
-        layout.addLayout(button_layout)
+        content_layout.addLayout(button_layout)
+        layout.addWidget(content_widget)
     
     def setup_connections(self):
         """Setup signal connections."""
@@ -504,6 +1066,25 @@ class ConnectionDialog(QDialog):
                 return False
         
         return True
+        
+    # Window dragging functionality
+    def mousePressEvent(self, event):
+        """Handle mouse press for dragging the window."""
+        if hasattr(self, 'title_bar') and self.title_bar.underMouse() and event.button() == Qt.LeftButton:
+            self.dragging = True
+            self.drag_position = event.globalPos() - self.frameGeometry().topLeft()
+            event.accept()
+    
+    def mouseMoveEvent(self, event):
+        """Handle mouse move for dragging the window."""
+        if hasattr(self, 'dragging') and self.dragging and event.buttons() == Qt.LeftButton:
+            self.move(event.globalPos() - self.drag_position)
+            event.accept()
+    
+    def mouseReleaseEvent(self, event):
+        """Handle mouse release for dragging the window."""
+        if hasattr(self, 'dragging'):
+            self.dragging = False
     
     def get_connection_info(self) -> ConnectionInfo:
         """Get the complete connection information."""
@@ -524,3 +1105,13 @@ class ConnectionDialog(QDialog):
             self.test_worker.wait()
         
         event.accept()
+    
+    def keyPressEvent(self, event):
+        """Handle key press events."""
+        if event.key() == Qt.Key_Escape:
+            self.reject()
+        elif event.key() == Qt.Key_Return or event.key() == Qt.Key_Enter:
+            if self.connect_btn.isEnabled():
+                self.accept()
+        else:
+            super().keyPressEvent(event)

@@ -14,6 +14,7 @@ A professional desktop application built with PyQt5 for MongoDB database visuali
 - **Document Viewer**: Multiple view modes (JSON, Table, Tree, Statistics) for comprehensive data analysis
 - **Query Interface**: Execute MongoDB queries with syntax highlighting and result visualization
 - **Connection Management**: Save and manage multiple database connections with recent history
+- **Auto-Connect**: Automatically connects to localhost MongoDB on startup for seamless development
 - **Export Capabilities**: Export data in various formats (JSON, CSV, Excel)
 
 ### Professional Features
@@ -78,6 +79,14 @@ python app.py --reset-settings
 ```
 
 ### Connecting to MongoDB
+
+#### Auto-Connect (Default)
+- **Automatic**: The application automatically connects to `localhost:27017` on startup
+- **No Setup Required**: Works immediately if you have MongoDB running locally
+- **Configurable**: Can be disabled via File → Auto-Connect to Localhost menu
+- **Fallback**: If auto-connect fails, manually connect using the options below
+
+#### Manual Connection
 1. Launch the application
 2. Click "Connect" or use Ctrl+N
 3. Enter your MongoDB connection details:
